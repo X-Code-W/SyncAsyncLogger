@@ -6,6 +6,8 @@
 #include <vector>
 #include <memory>
 #include <sstream>
+#include <cassert>
+#include <cstdlib>
 namespace mylog
 {
     // 抽象格式化子项基类
@@ -123,20 +125,25 @@ namespace mylog
     class Formatter
     {
     public:
-        Formatter(const std::string &pattern = "[%d{%H%M%S}][%t][%c][%f:%l][%p]%T%m%n")
-            : _pattern(pattern) {}
+        Formatter(const std::string &pattern = "[%d{%H:%M:%S}][%t][%c][%f:%l][%p]%T%m%n")
+            : _pattern(pattern)
+        {
+            assert(ParsePattern());
+        }
         // 对msg消息格式化
-        void format(std::ostream &out, LogMsg msg)
+        void format(std::ostream &out, const LogMsg msg)
         {
             for (auto &item : _item)
                 item->format(out, msg);
         }
-        std::string format(LogMsg &msg)
+        std::string format(const LogMsg &msg)
         {
             std::stringstream ss;
             format(ss, msg);
             return ss.str();
         }
+
+    private:
         // 对格式化规则字符串进行解析
         bool ParsePattern()
         {
@@ -144,9 +151,9 @@ namespace mylog
             // %cabc%%[%d{%H:%M:%S}][%t][%p]%m%n
             std::vector<std::pair<std::string, std::string>> fmt_order;
             size_t pos = 0;
+            std::string key, val;
             while (pos < _pattern.size())
             {
-                std::string key, val;
                 // 原始字符
                 if (_pattern[pos] != '%')
                 {
@@ -175,7 +182,7 @@ namespace mylog
                     return false;
                 }
                 key = _pattern[pos]; // 格式字符，格式字符为最后一个
-                pos+=1;//格式字符下一个位置
+                pos += 1;            // 格式字符下一个位置
                 if (pos < _pattern.size() && _pattern[pos] == '{')
                 {
                     pos += 1; // 子项第一个位置
@@ -185,7 +192,7 @@ namespace mylog
                     }
                     if (pos == _pattern.size())
                     {
-                        std::cout<<"子规则{}匹配出错\n";
+                        std::cout << "子规则{}匹配出错\n";
                         return false;
                     }
                     pos += 1;
@@ -201,8 +208,6 @@ namespace mylog
             }
             return true;
         }
-
-    private:
         // 根据不同的格式化字符串，创建不同的格式化子项对象
         std::shared_ptr<FormatItem> CreateItem(const std::string &key, const std::string &val)
         {
@@ -224,7 +229,10 @@ namespace mylog
                 return std::make_shared<NlineFormatItem>();
             if (key == "m")
                 return std::make_shared<MsgFormatItem>();
-            return std::make_shared<OtherFormatItem>(val);
+            if (key == "")
+                return std::make_shared<OtherFormatItem>(val);
+            std::cout<<"没有对应的格式化字符: %"<<key<<std::endl;
+            abort();
         }
         std::string _pattern; // 格式化规则字符串
         std::vector<std::shared_ptr<FormatItem>> _item;
