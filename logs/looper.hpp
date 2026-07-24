@@ -1,6 +1,8 @@
 /*异步工作器设计
  */
 
+#ifndef  __LOOPER_HPP_
+#define  __LOOPER_HPP_
 #include "buffer.hpp"
 #include <thread>
 #include <mutex>
@@ -24,6 +26,11 @@ namespace mylog
                                                               _stop(false),
                                                               _thread(std::thread(&AsyncLooper::threadStart, this)),
                                                               _callBack(cb) {}
+
+        ~AsyncLooper()
+        {
+            stop();
+        }
         // 停止工作器
         void stop()
         {
@@ -48,12 +55,15 @@ namespace mylog
     private:
         void threadStart() // 线程入口函数
         {
-            while (!_stop)
+            while (1)
             {
                 // 1.生产缓冲区是否有数据，有则交换，没有则堵塞
                 {
                     std::unique_lock<std::mutex> lock(_mutex);
-                    // 退出前或满足条件，往下走
+                    // 退出标志被设置，且生产缓冲区没有数据，这时候再退出，否则有可能造成生产缓冲区有数据，没被完全处理
+                    if (_stop && _pro_buf.empty())
+                        break;
+                    // 退出前或有数据被唤醒，则返回真，否则堵塞
                     _con_cond.wait(lock, [&]()
                                    { return _stop || !_pro_buf.empty(); });
                     _con_buf.swap(_pro_buf);
@@ -81,3 +91,5 @@ namespace mylog
         std::mutex _mutex;
     };
 }
+
+#endif
